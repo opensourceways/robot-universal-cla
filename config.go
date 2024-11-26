@@ -82,7 +82,7 @@ type repoConfig struct {
 	// Default is by email of author.
 	CheckByCommitter bool `json:"check_by_committer"`
 
-	// LitePRCommitter is the config for lite pr commiter.
+	// LitePRCommitter is the config for lite pr committer.
 	// It must be set when `check_by_committer` is true.
 	LitePRCommitter litePRCommiter `json:"lite_pr_committer"`
 
