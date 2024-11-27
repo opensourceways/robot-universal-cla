@@ -20,7 +20,8 @@ import (
 
 // configuration holds a list of repoConfig configurations.
 type configuration struct {
-	ConfigItems []repoConfig `json:"config_items,omitempty"`
+	ConfigItems    []repoConfig `json:"config_items,omitempty"`
+	UserMarkFormat string       `json:"user_mark_format,omitempty"`
 }
 
 // Validate to check the configmap data's validation, returns an error if invalid
