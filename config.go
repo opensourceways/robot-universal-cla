@@ -20,14 +20,15 @@ import (
 
 // configuration holds a list of repoConfig configurations.
 type configuration struct {
-	ConfigItems              []repoConfig `json:"config_items,omitempty"`
-	UserMarkFormat           string       `json:"user_mark_format,omitempty"`
-	CommentCommandTrigger    string       `json:"comment_command_trigger"`
-	CommentPRNoCommits       string       `json:"comment_pr_no_commits"`
-	CommentAllSigned         string       `json:"comment_all_signed"`
-	CommentSomeNeedSign      string       `json:"comment_some_need_sign"`
-	CommentUpdateLabelFailed string       `json:"comment_update_label_failed"`
-	PlaceholderCommitter     string       `json:"placeholder_committer"`
+	ConfigItems                  []repoConfig `json:"config_items,omitempty"`
+	UserMarkFormat               string       `json:"user_mark_format"`
+	CommentCommandTrigger        string       `json:"comment_command_trigger"`
+	CommentPRNoCommits           string       `json:"comment_pr_no_commits"`
+	CommentAllSigned             string       `json:"comment_all_signed"`
+	CommentSomeNeedSign          string       `json:"comment_some_need_sign"`
+	CommentUpdateLabelFailed     string       `json:"comment_update_label_failed"`
+	PlaceholderCommitter         string       `json:"placeholder_committer"`
+	PlaceholderCLASignGuideTitle string       `json:"placeholder_cla_sign_guide_title"`
 }
 
 // Validate to check the configmap data's validation, returns an error if invalid

@@ -42,25 +42,26 @@ func (o *robotOptions) addFlags(fs *flag.FlagSet) {
 
 func (o *robotOptions) validateFlags() (*configuration, []byte) {
 	if err := o.service.ValidateComposite(); err != nil {
-		logrus.Errorf("invalid service options, err:%s", err.Error())
+		logrus.WithError(err).Errorf("invalid service options")
 		o.interrupt = true
 		return nil, nil
 	}
 
 	configmap, err := config.NewConfigmapAgent(&configuration{}, o.service.ConfigFile)
 	if err != nil {
-		logrus.Errorf("load config, err:%s", err.Error())
+		logrus.WithError(err).Error("fatal error occurred while loading and parsing configmap")
+		o.interrupt = true
 		return nil, nil
 	}
 
 	token, err := secret.LoadSingleSecret(o.tokenPath)
 	if err != nil {
-		logrus.WithError(err).Fatal("fatal error occurred while loading token")
+		logrus.WithError(err).Error("fatal error occurred while loading token")
 		o.interrupt = true
 	}
 	if o.delToken {
 		if err = os.Remove(o.tokenPath); err != nil {
-			logrus.WithError(err).Fatal("fatal error occurred while deleting token")
+			logrus.WithError(err).Error("fatal error occurred while deleting token")
 			o.interrupt = true
 		}
 	}
@@ -83,6 +84,7 @@ func (o *robotOptions) gatherOptions(fs *flag.FlagSet, args ...string) (*configu
 		commentAllSigned = cnf.CommentAllSigned
 		commentSomeNeedSign = cnf.CommentSomeNeedSign
 		placeholderCommitter = cnf.PlaceholderCommitter
+		placeholderCLASignGuideTitle = cnf.PlaceholderCLASignGuideTitle
 	}
 
 	return cnf, token

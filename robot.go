@@ -14,7 +14,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"github.com/opensourceways/robot-framework-lib/client"
 	"github.com/opensourceways/robot-framework-lib/config"
@@ -29,9 +28,8 @@ import (
 
 // iClient is an interface that defines methods for client-side interactions
 type iClient interface {
-	// CreatePRComment creates a comment for a pull request in a specified organization and repository
 	CreatePRComment(org, repo, number, comment string) (success bool)
-
+	GetPullRequestLabels(org, repo, number string) (result []string, success bool)
 	AddPRLabels(org, repo, number string, labels []string) (success bool)
 	RemovePRLabels(org, repo, number string, labels []string) (success bool)
 	GetPullRequestCommits(org, repo, number string) (result []client.PRCommit, success bool)
@@ -53,8 +51,8 @@ func newRobot(c *configuration, token []byte) *robot {
 	return &robot{cli: client.NewClient(token, logger), cnf: c, log: logger}
 }
 
-func (bot *robot) NewConfig() config.Configmap {
-	return &configuration{}
+func (bot *robot) GetConfigmap() config.Configmap {
+	return bot.cnf
 }
 
 func (bot *robot) RegisterEventHandler(p framework.HandlerRegister) {
@@ -66,27 +64,14 @@ func (bot *robot) GetLogger() *logrus.Entry {
 	return bot.log
 }
 
-// getConfig first checks if the specified organization and repository is available in the provided repoConfig list.
-// Returns an error if not found the available repoConfig.
-func (bot *robot) getConfig(cnf config.Configmap, org, repo string) (*repoConfig, error) {
-	c := cnf.(*configuration)
-	if bc := c.get(org, repo); bc != nil {
-		return bc, nil
-	}
-
-	return nil, errors.New("no config for this repo: " + org + "/" + repo)
-}
-
-const ()
-
 var (
-	// regexpReopenComment is a compiled regular expression for reopening comments
+	// a compiled regular expression for the comment that uses to check CLA sign state
 	regexpCheckCLAComment = regexp.MustCompile(`(?mi)^/check-cla$`)
-	// regexpCloseComment is a compiled regular expression for closing comments
+	// a compiled regular expression for the comment that uses to remove CLA label
 	regexpCancelCLAComment = regexp.MustCompile(`(?mi)^/cla cancel$`)
 	userMarkFormat         = ""
 
-	// placeholderCommitter is a placeholder string for the commenter's name
+	// a placeholder string for the committer name
 	placeholderCommitter = ""
 	// the value from configuration.CommentNoPermissionOperateIssue
 	commentCommandTrigger = ""
@@ -96,27 +81,28 @@ var (
 	commentAllSigned    = ""
 	commentSomeNeedSign = ""
 	// the value from configuration.CommentNoPermissionOperatePR
-	commentUpdateLabelFailed = ""
+	commentUpdateLabelFailed     = ""
+	placeholderCLASignGuideTitle = ""
 )
 
 func (bot *robot) handlePullRequestEvent(evt *client.GenericEvent, cnf config.Configmap, logger *logrus.Entry) {
 	org, repo, number := utils.GetString(evt.Org), utils.GetString(evt.Repo), utils.GetString(evt.Number)
-	repoCnf, err := bot.getConfig(cnf, org, repo)
-	// If the specified repository not match any repository  in the repoConfig list, it logs the error and returns
-	if err != nil {
-		logger.WithError(err).Warning()
+	repoCnf := bot.cnf.get(org, repo)
+	// If the specified repository not match any repository  in the repoConfig list, it logs the warning and returns
+	if repoCnf == nil {
+		logger.Warningf("no config for the repo: " + org + "/" + repo)
 		return
 	}
 
-	// Checks if PR is first created or PR source code is updated
+	// Checks if PR is firstly created or PR source code is updated
 	if !(bot.cli.CheckIfPRCreateEvent(evt) || bot.cli.CheckIfPRSourceCodeUpdateEvent(evt)) {
 		return
 	}
 
-	bot.checkIfCLASigned(org, repo, number, repoCnf, logger)
+	bot.checkIfAllSignedCLA(org, repo, number, repoCnf, logger)
 }
 
-func (bot *robot) checkIfCLASigned(org, repo, number string, repoCnf *repoConfig, logger *logrus.Entry) {
+func (bot *robot) checkIfAllSignedCLA(org, repo, number string, repoCnf *repoConfig, logger *logrus.Entry) {
 
 	// List
 	commits, success := bot.cli.GetPullRequestCommits(org, repo, number)
@@ -130,17 +116,18 @@ func (bot *robot) checkIfCLASigned(org, repo, number string, repoCnf *repoConfig
 		return
 	}
 
-	if allSigned, unsignedUsers, signedUsers := bot.checkCLASignedResult(org, repo, number, commits, repoCnf); allSigned {
-		bot.passCLASignature(org, repo, number, signedUsers, repoCnf)
+	prLabels, _ := bot.cli.GetPullRequestLabels(org, repo, number)
+	allSigned, signResult := bot.checkCLASignResult(org, repo, number, commits, repoCnf)
+	if allSigned {
+		bot.passCLASignature(org, repo, number, signResult[0], prLabels, repoCnf)
 	} else {
-		bot.waitCLASignature(org, repo, number, unsignedUsers, repoCnf)
+		bot.waitCLASignature(org, repo, number, signResult[1], prLabels, repoCnf)
 	}
 }
 
-func (bot *robot) checkCLASignedResult(org, repo, number string,
-	commits []client.PRCommit, repoCnf *repoConfig) (bool, string, string) {
-
-	users, emails := bot.ListCodeContributorNameAndEmail(commits, repoCnf)
+func (bot *robot) checkCLASignResult(org, repo, number string,
+	commits []client.PRCommit, repoCnf *repoConfig) (allSigned bool, signResult [3][]string) {
+	users, emails := bot.ListContributorNameAndEmail(commits, repoCnf)
 	var signedUsers, unsignedUsers, unknownUsers []string
 	for i, email := range emails {
 		if repoCnf.LitePRCommitter.Email == email || email == "" {
@@ -160,29 +147,23 @@ func (bot *robot) checkCLASignedResult(org, repo, number string,
 		}
 	}
 
-	allSigned := len(signedUsers) == len(emails)
-
 	if len(unknownUsers) != 0 {
 		bot.cli.CreatePRComment(org, repo, number, commentCommandTrigger)
-		return false, "", ""
+		signResult[2] = unknownUsers
+		return
 	}
 
 	if len(unsignedUsers) != 0 {
-		unsignedUserMark := make([]string, len(unsignedUsers))
-		for i, user := range unsignedUsers {
-			unsignedUserMark[i] = strings.ReplaceAll(userMarkFormat, placeholderCommitter, user)
-		}
-		return false, strings.Join(unsignedUserMark, ", "), ""
+		signResult[1] = unsignedUsers
+		return
 	}
 
-	signedUserMark := make([]string, len(signedUsers))
-	for i, user := range signedUsers {
-		signedUserMark[i] = strings.ReplaceAll(userMarkFormat, placeholderCommitter, user)
-	}
-	return allSigned, "", strings.Join(signedUserMark, ", ")
+	signResult[0] = signedUsers
+	allSigned = len(signedUsers) == len(emails)
+	return
 }
 
-func (bot *robot) ListCodeContributorNameAndEmail(commits []client.PRCommit, repoCnf *repoConfig) ([]string, []string) {
+func (bot *robot) ListContributorNameAndEmail(commits []client.PRCommit, repoCnf *repoConfig) ([]string, []string) {
 	n := len(commits)
 	authors, authorEmails, authorSize := make([]string, n), make([]string, n), 0
 	committers, committerEmails, committerSize := make([]string, n), make([]string, n), 0
@@ -205,56 +186,90 @@ func (bot *robot) ListCodeContributorNameAndEmail(commits []client.PRCommit, rep
 	return authors[:authorSize], authorEmails[:authorSize]
 }
 
-func (bot *robot) deleteCLASignGuideComment(org, repo, number string) {
+func (bot *robot) removeCLASignGuideComment(org, repo, number string) {
 	comments, success := bot.cli.ListPullRequestComments(org, repo, number)
 	if !success {
 		return
 	}
 
 	for i := range comments {
-		if strings.Contains(comments[i].Body, "| CLA Signature Guide |") {
+		if strings.Contains(comments[i].Body, placeholderCLASignGuideTitle) {
 			bot.cli.DeletePRComment(org, repo, comments[i].ID)
+			break
 		}
 	}
 }
 
-func (bot *robot) passCLASignature(org, repo, number, signedUsers string, repoCnf *repoConfig) {
-	comment := commentUpdateLabelFailed
-	if bot.cli.RemovePRLabels(org, repo, number, []string{url.QueryEscape(repoCnf.CLALabelNo)}) {
+func (bot *robot) passCLASignature(org, repo, number string, signedUsers, prLabels []string, repoCnf *repoConfig) {
+
+	if slices.Contains(prLabels, repoCnf.CLALabelNo) {
+		if !bot.cli.RemovePRLabels(org, repo, number, []string{url.QueryEscape(repoCnf.CLALabelNo)}) {
+			bot.cli.CreatePRComment(org, repo, number, commentUpdateLabelFailed)
+		}
+	}
+
+	if !slices.Contains(prLabels, repoCnf.CLALabelYes) {
+		comment := commentUpdateLabelFailed
 		if bot.cli.AddPRLabels(org, repo, number, []string{repoCnf.CLALabelYes}) {
-			comment = strings.ReplaceAll(commentAllSigned, placeholderCommitter, signedUsers)
-			bot.deleteCLASignGuideComment(org, repo, number)
+			signedUserMark := make([]string, len(signedUsers))
+			for i, user := range signedUsers {
+				signedUserMark[i] = strings.ReplaceAll(userMarkFormat, placeholderCommitter, user)
+			}
+			comment = strings.ReplaceAll(commentAllSigned, placeholderCommitter, strings.Join(signedUserMark, ", "))
+			bot.removeCLASignGuideComment(org, repo, number)
 		}
+		bot.cli.CreatePRComment(org, repo, number, comment)
 	}
-	bot.cli.CreatePRComment(org, repo, number, comment)
 }
 
-func (bot *robot) waitCLASignature(org, repo, number, unsignedUsers string, repoCnf *repoConfig) {
-	if unsignedUsers == "" {
+func (bot *robot) waitCLASignature(org, repo, number string, unsignedUsers, prLabels []string, repoCnf *repoConfig) {
+	if len(unsignedUsers) == 0 {
 		return
 	}
-	comment := commentUpdateLabelFailed
-	if bot.cli.RemovePRLabels(org, repo, number, []string{url.QueryEscape(repoCnf.CLALabelYes)}) {
-		if bot.cli.AddPRLabels(org, repo, number, []string{repoCnf.CLALabelNo}) {
-			comment = strings.ReplaceAll(commentSomeNeedSign, placeholderCommitter, unsignedUsers)
+
+	if slices.Contains(prLabels, repoCnf.CLALabelYes) {
+		if !bot.cli.RemovePRLabels(org, repo, number, []string{url.QueryEscape(repoCnf.CLALabelYes)}) {
+			bot.cli.CreatePRComment(org, repo, number, commentUpdateLabelFailed)
 		}
 	}
-	bot.cli.CreatePRComment(org, repo, number, comment)
+
+	if !slices.Contains(prLabels, repoCnf.CLALabelNo) {
+		comment := commentUpdateLabelFailed
+		if bot.cli.AddPRLabels(org, repo, number, []string{repoCnf.CLALabelNo}) {
+			unsignedUserMark := make([]string, len(unsignedUsers))
+			for i, user := range unsignedUsers {
+				unsignedUserMark[i] = strings.ReplaceAll(userMarkFormat, placeholderCommitter, user)
+			}
+			comment = strings.ReplaceAll(commentSomeNeedSign, placeholderCommitter, strings.Join(unsignedUserMark, ", "))
+			bot.removeCLASignGuideComment(org, repo, number)
+		}
+		bot.cli.CreatePRComment(org, repo, number, comment)
+	}
 }
 
 func (bot *robot) handlePullRequestCommentEvent(evt *client.GenericEvent, cnf config.Configmap, logger *logrus.Entry) {
 	org, repo, number := utils.GetString(evt.Org), utils.GetString(evt.Repo), utils.GetString(evt.Number)
-	repoCnf, err := bot.getConfig(cnf, org, repo)
-	// If the specified repository not match any repository  in the repoConfig list, it logs the error and returns
-	if err != nil {
-		logger.WithError(err).Warning()
+	repoCnf := bot.cnf.get(org, repo)
+	// If the specified repository not match any repository  in the repoConfig list, it logs the warning and returns
+	if repoCnf == nil {
+		logger.Warningf("no config for the repo: " + org + "/" + repo)
+		return
+	}
+
+	comment := utils.GetString(evt.Comment)
+	// Checks if the comment is only "/cla cancel" that can be handled
+	if regexpCancelCLAComment.MatchString(comment) {
+		prLabels, _ := bot.cli.GetPullRequestLabels(org, repo, number)
+		if slices.Contains(prLabels, repoCnf.CLALabelYes) {
+			bot.cli.RemovePRLabels(org, repo, number, []string{url.QueryEscape(repoCnf.CLALabelNo)})
+		}
 		return
 	}
 
 	// Checks if the comment is only "/check-cla" that can be handled
-	if !regexpCheckCLAComment.MatchString(utils.GetString(evt.Comment)) {
+	if !regexpCheckCLAComment.MatchString(comment) {
 		return
 	}
 
-	bot.checkIfCLASigned(org, repo, number, repoCnf, logger)
+	bot.checkIfAllSignedCLA(org, repo, number, repoCnf, logger)
 }
