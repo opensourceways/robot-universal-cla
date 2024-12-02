@@ -76,16 +76,5 @@ func (o *robotOptions) gatherOptions(fs *flag.FlagSet, args ...string) (*configu
 	_ = fs.Parse(args)
 	cnf, token := o.validateFlags()
 
-	if cnf != nil {
-		userMarkFormat = cnf.UserMarkFormat
-		commentCommandTrigger = cnf.CommentCommandTrigger
-		commentPRNoCommits = cnf.CommentPRNoCommits
-		commentUpdateLabelFailed = cnf.CommentUpdateLabelFailed
-		commentAllSigned = cnf.CommentAllSigned
-		commentSomeNeedSign = cnf.CommentSomeNeedSign
-		placeholderCommitter = cnf.PlaceholderCommitter
-		placeholderCLASignGuideTitle = cnf.PlaceholderCLASignGuideTitle
-	}
-
 	return cnf, token
 }

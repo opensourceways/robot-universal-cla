@@ -48,9 +48,9 @@ func (c *configuration) Validate() error {
 	return nil
 }
 
-// get retrieves a repoConfig for a given organization and repository.
+// getRepoConfig retrieves a repoConfig for a given organization and repository.
 // Returns the repoConfig if found, otherwise returns nil.
-func (c *configuration) get(org, repo string) *repoConfig {
+func (c *configuration) getRepoConfig(org, repo string) *repoConfig {
 	if c == nil || len(c.ConfigItems) == 0 {
 		return nil
 	}
