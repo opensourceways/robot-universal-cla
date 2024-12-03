@@ -16,19 +16,21 @@ package main
 import (
 	"errors"
 	"github.com/opensourceways/server-common-lib/config"
+	"reflect"
+	"strings"
 )
 
 // configuration holds a list of repoConfig configurations.
 type configuration struct {
 	ConfigItems                  []repoConfig `json:"config_items,omitempty"`
-	UserMarkFormat               string       `json:"user_mark_format"`
-	CommentCommandTrigger        string       `json:"comment_command_trigger"`
-	CommentPRNoCommits           string       `json:"comment_pr_no_commits"`
-	CommentAllSigned             string       `json:"comment_all_signed"`
-	CommentSomeNeedSign          string       `json:"comment_some_need_sign"`
-	CommentUpdateLabelFailed     string       `json:"comment_update_label_failed"`
-	PlaceholderCommitter         string       `json:"placeholder_committer"`
-	PlaceholderCLASignGuideTitle string       `json:"placeholder_cla_sign_guide_title"`
+	UserMarkFormat               string       `json:"user_mark_format" required:"true"`
+	CommentCommandTrigger        string       `json:"comment_command_trigger" required:"true"`
+	CommentPRNoCommits           string       `json:"comment_pr_no_commits" required:"true"`
+	CommentAllSigned             string       `json:"comment_all_signed" required:"true"`
+	CommentSomeNeedSign          string       `json:"comment_some_need_sign" required:"true"`
+	CommentUpdateLabelFailed     string       `json:"comment_update_label_failed" required:"true"`
+	PlaceholderCommitter         string       `json:"placeholder_committer" required:"true"`
+	PlaceholderCLASignGuideTitle string       `json:"placeholder_cla_sign_guide_title" required:"true"`
 }
 
 // Validate to check the configmap data's validation, returns an error if invalid
@@ -40,9 +42,32 @@ func (c *configuration) Validate() error {
 	// Validate each repo configuration
 	items := c.ConfigItems
 	for i := range items {
-		if err := items[i].validate(); err != nil {
+		if err := items[i].validateRepoConfig(); err != nil {
 			return err
 		}
+	}
+
+	return validateRequiredConfig(*c)
+}
+
+func validateRequiredConfig[C configuration | repoConfig](c C) error {
+	k := reflect.TypeOf(c)
+	v := reflect.ValueOf(c)
+
+	var missing []string
+	n := k.NumField()
+	for i := 0; i < n; i++ {
+		tag := k.Field(i).Tag.Get("required")
+		if len(tag) > 0 {
+			s, _ := v.Field(i).Interface().(string)
+			if s == "" {
+				missing = append(missing, k.Field(i).Tag.Get("json"))
+			}
+		}
+	}
+
+	if len(missing) != 0 {
+		return errors.New("missing the follow config: " + strings.Join(missing, ", "))
 	}
 
 	return nil
@@ -98,14 +123,18 @@ type repoConfig struct {
 	FAQURL string `json:"faq_url" required:"true"`
 }
 
-// validate to check the repoConfig data's validation, returns an error if invalid
-func (c *repoConfig) validate() error {
+// validateRepoConfig to check the repoConfig data's validation, returns an error if invalid
+func (c *repoConfig) validateRepoConfig() error {
 	// If the bot is not configured to monitor any repositories, return an error.
 	if len(c.Repos) == 0 {
 		return errors.New("the repositories configuration can not be empty")
 	}
 
-	return c.RepoFilter.Validate()
+	if err := c.RepoFilter.Validate(); err != nil {
+		return err
+	}
+
+	return validateRequiredConfig(*c)
 }
 
 type litePRCommiter struct {

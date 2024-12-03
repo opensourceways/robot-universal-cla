@@ -48,7 +48,9 @@ func TestValidate(t *testing.T) {
 				&configuration{},
 				"",
 			},
-			[2]error{nil, nil},
+			[2]error{nil, errors.New("missing the follow config: user_mark_format, " +
+				"comment_command_trigger, comment_pr_no_commits, comment_all_signed, comment_some_need_sign, " +
+				"comment_update_label_failed, placeholder_committer, placeholder_cla_sign_guide_title")},
 		},
 		{
 			"no valid org or repo in the config",
