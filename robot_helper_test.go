@@ -32,6 +32,7 @@ type mockClient struct {
 	successfulCheckIfPRSourceCodeUpdateEvent bool
 	successfulGetPullRequestCommits          bool
 	successfulGetPullRequestLabels           bool
+	successfulListPullRequestComments        bool
 	method                                   string
 	commits                                  []client.PRCommit
 	prComments                               []client.PRComment
@@ -85,8 +86,8 @@ func (m *mockClient) GetPullRequestLabels(org, repo, number string) ([]string, b
 }
 
 func (m *mockClient) ListPullRequestComments(org, repo, number string) ([]client.PRComment, bool) {
-	m.method = "GetPullRequestLabels"
-	return m.prComments, m.successfulGetPullRequestLabels
+	m.method = "ListPullRequestComments"
+	return m.prComments, m.successfulListPullRequestComments
 }
 
 const (
@@ -94,7 +95,8 @@ const (
 	repo      = "repo1"
 	number    = "1"
 	commenter = "commenter1"
-	label     = "label1"
+	labelYes  = "label-yes"
+	labelNo   = "label-no"
 )
 
 func TestRemoveCLASignGuideComment(t *testing.T) {
@@ -103,13 +105,99 @@ func TestRemoveCLASignGuideComment(t *testing.T) {
 	bot := &robot{cli: mc, cnf: &configuration{
 		PlaceholderCLASignGuideTitle: "#123",
 	}}
-
 	cli, ok := bot.cli.(*mockClient)
 	assert.Equal(t, true, ok)
+
 	case1 := "ListPullRequestComments"
 	cli.method = case1
-	// No comments to remove
+	// get comments failed
 	bot.removeCLASignGuideComment(org, repo, number)
 	assert.Equal(t, case1, cli.method)
+
+	cli.successfulListPullRequestComments = true
+	// getting comments to remove
+	bot.removeCLASignGuideComment(org, repo, number)
+	assert.Equal(t, case1, cli.method)
+
+	cli.prComments = []client.PRComment{
+		{
+			"123132",
+			"111123",
+		},
+	}
+	bot.cnf.PlaceholderCLASignGuideTitle = "222"
+	// not found CLA sign guide comment
+	bot.removeCLASignGuideComment(org, repo, number)
+	assert.Equal(t, case1, cli.method)
+
+	case4 := "DeletePRComment"
+	cli.method = case4
+	bot.cnf.PlaceholderCLASignGuideTitle = "111"
+	// delete the CLA sign guide comment
+	bot.removeCLASignGuideComment(org, repo, number)
+	assert.Equal(t, case4, cli.method)
+}
+
+func TestWaitCLASignature(t *testing.T) {
+	mc := new(mockClient)
+	bot := &robot{cli: mc, cnf: &configuration{
+		CommentSomeNeedSign:      "%s, 24, %s",
+		PlaceholderCommitter:     "ddd",
+		CommentUpdateLabelFailed: "14",
+	}}
+	cli, ok := bot.cli.(*mockClient)
+	assert.Equal(t, true, ok)
+
+	repoCnf := &repoConfig{
+		CLALabelYes: labelYes,
+		CLALabelNo:  labelNo,
+	}
+
+	case1 := "unsigned users is empty"
+	cli.method = case1
+	bot.waitCLASignature(org, repo, number, []string{}, []string{labelYes}, repoCnf)
+	assert.Equal(t, case1, cli.method)
+
+	case2 := ""
+	cli.method = case2
+	// PR labels contains CLA failed label
+	bot.waitCLASignature(org, repo, number, []string{"user1"}, []string{labelNo}, repoCnf)
+	assert.Equal(t, case2, cli.method)
+
+	case3 := "CreatePRComment"
+	cli.method = case3
+	cli.successfulAddPRLabels = true
+	// remove CLA success label, and add CLA failed label
+	bot.waitCLASignature(org, repo, number, []string{"user1"}, []string{labelYes}, repoCnf)
+	assert.Equal(t, case3, cli.method)
+}
+
+func TestPassCLASignature(t *testing.T) {
+	mc := new(mockClient)
+	bot := &robot{cli: mc, cnf: &configuration{
+		CommentAllSigned:         "%s, 99, %s",
+		PlaceholderCommitter:     "aaa",
+		CommentUpdateLabelFailed: "53",
+	}}
+	cli, ok := bot.cli.(*mockClient)
+	assert.Equal(t, true, ok)
+
+	repoCnf := &repoConfig{
+		CLALabelYes: labelYes,
+		CLALabelNo:  labelNo,
+	}
+
+	case1 := "CreatePRComment"
+	cli.method = case1
+	// PR labels contains CLA failed label and CLA success label
+	bot.passCLASignature(org, repo, number, []string{"user2"}, []string{labelYes, labelNo}, repoCnf)
+	assert.Equal(t, case1, cli.method)
+
+	case2 := "CreatePRComment"
+	cli.method = case2
+	cli.successfulAddPRLabels = true
+	// PR labels is empty
+	bot.passCLASignature(org, repo, number, []string{"user3"}, []string{}, repoCnf)
+	assert.Equal(t, case2, cli.method)
 
 }

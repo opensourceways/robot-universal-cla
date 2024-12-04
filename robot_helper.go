@@ -146,7 +146,7 @@ func (bot *robot) waitCLASignature(org, repo, number string, unsignedUsers, prLa
 			for i, user := range unsignedUsers {
 				unsignedUserMark[i] = strings.ReplaceAll(bot.cnf.UserMarkFormat, bot.cnf.PlaceholderCommitter, user)
 			}
-			comment = strings.ReplaceAll(bot.cnf.CommentSomeNeedSign, bot.cnf.PlaceholderCommitter, strings.Join(unsignedUserMark, ", "))
+			comment = fmt.Sprintf(bot.cnf.CommentSomeNeedSign, strings.Join(unsignedUserMark, ", "), repoCnf.SignURL, repoCnf.FAQURL)
 			bot.removeCLASignGuideComment(org, repo, number)
 		}
 		bot.cli.CreatePRComment(org, repo, number, comment)
