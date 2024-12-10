@@ -158,7 +158,7 @@ func TestWaitCLASignature(t *testing.T) {
 	bot.waitCLASignature(org, repo, number, []string{}, []string{labelYes}, repoCnf)
 	assert.Equal(t, case1, cli.method)
 
-	case2 := ""
+	case2 := "CreatePRComment"
 	cli.method = case2
 	// PR labels contains CLA failed label
 	bot.waitCLASignature(org, repo, number, []string{"user1"}, []string{labelNo}, repoCnf)

@@ -114,18 +114,17 @@ func (bot *robot) passCLASignature(org, repo, number string, signedUsers, prLabe
 		}
 	}
 
-	if !slices.Contains(prLabels, repoCnf.CLALabelYes) {
-		comment := bot.cnf.CommentUpdateLabelFailed
-		if bot.cli.AddPRLabels(org, repo, number, []string{repoCnf.CLALabelYes}) {
-			signedUserMark := make([]string, len(signedUsers))
-			for i, user := range signedUsers {
-				signedUserMark[i] = strings.ReplaceAll(bot.cnf.UserMarkFormat, bot.cnf.PlaceholderCommitter, user)
-			}
-			comment = strings.ReplaceAll(bot.cnf.CommentAllSigned, bot.cnf.PlaceholderCommitter, strings.Join(signedUserMark, ", "))
-			bot.removeCLASignGuideComment(org, repo, number)
+	comment := bot.cnf.CommentUpdateLabelFailed
+	if bot.cli.AddPRLabels(org, repo, number, []string{repoCnf.CLALabelYes}) {
+		signedUserMark := make([]string, len(signedUsers))
+		for i, user := range signedUsers {
+			signedUserMark[i] = strings.ReplaceAll(bot.cnf.UserMarkFormat, bot.cnf.PlaceholderCommitter, user)
 		}
-		bot.cli.CreatePRComment(org, repo, number, comment)
+		comment = strings.ReplaceAll(bot.cnf.CommentAllSigned, bot.cnf.PlaceholderCommitter, strings.Join(signedUserMark, ", "))
+		bot.removeCLASignGuideComment(org, repo, number)
 	}
+	bot.cli.CreatePRComment(org, repo, number, comment)
+
 }
 
 func (bot *robot) waitCLASignature(org, repo, number string, unsignedUsers, prLabels []string, repoCnf *repoConfig) {
@@ -139,18 +138,17 @@ func (bot *robot) waitCLASignature(org, repo, number string, unsignedUsers, prLa
 		}
 	}
 
-	if !slices.Contains(prLabels, repoCnf.CLALabelNo) {
-		comment := bot.cnf.CommentUpdateLabelFailed
-		if bot.cli.AddPRLabels(org, repo, number, []string{repoCnf.CLALabelNo}) {
-			unsignedUserMark := make([]string, len(unsignedUsers))
-			for i, user := range unsignedUsers {
-				unsignedUserMark[i] = strings.ReplaceAll(bot.cnf.UserMarkFormat, bot.cnf.PlaceholderCommitter, user)
-			}
-			comment = fmt.Sprintf(bot.cnf.CommentSomeNeedSign, strings.Join(unsignedUserMark, ", "), repoCnf.SignURL, repoCnf.FAQURL)
-			bot.removeCLASignGuideComment(org, repo, number)
+	comment := bot.cnf.CommentUpdateLabelFailed
+	if bot.cli.AddPRLabels(org, repo, number, []string{repoCnf.CLALabelNo}) {
+		unsignedUserMark := make([]string, len(unsignedUsers))
+		for i, user := range unsignedUsers {
+			unsignedUserMark[i] = strings.ReplaceAll(bot.cnf.UserMarkFormat, bot.cnf.PlaceholderCommitter, user)
 		}
-		bot.cli.CreatePRComment(org, repo, number, comment)
+		comment = fmt.Sprintf(bot.cnf.CommentSomeNeedSign, strings.Join(unsignedUserMark, ", "), repoCnf.SignURL, repoCnf.FAQURL)
+		bot.removeCLASignGuideComment(org, repo, number)
 	}
+	bot.cli.CreatePRComment(org, repo, number, comment)
+
 }
 
 func (bot *robot) removeCLASignGuideComment(org, repo, number string) {
