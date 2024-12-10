@@ -158,9 +158,9 @@ func (bot *robot) removeCLASignGuideComment(org, repo, number string) {
 	}
 
 	for i := range comments {
-		if strings.Contains(comments[i].Body, bot.cnf.PlaceholderCLASignGuideTitle) {
+		if strings.Contains(comments[i].Body, bot.cnf.PlaceholderCLASignGuideTitle) ||
+			strings.Contains(comments[i].Body, bot.cnf.PlaceholderCLASignPassTitle) {
 			bot.cli.DeletePRComment(org, repo, comments[i].ID)
-			break
 		}
 	}
 }

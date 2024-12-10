@@ -31,6 +31,7 @@ type configuration struct {
 	CommentUpdateLabelFailed     string       `json:"comment_update_label_failed" required:"true"`
 	PlaceholderCommitter         string       `json:"placeholder_committer" required:"true"`
 	PlaceholderCLASignGuideTitle string       `json:"placeholder_cla_sign_guide_title" required:"true"`
+	PlaceholderCLASignPassTitle  string       `json:"placeholder_cla_sign_pass_title" required:"true"`
 }
 
 // Validate to check the configmap data's validation, returns an error if invalid
