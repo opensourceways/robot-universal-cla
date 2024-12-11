@@ -15,6 +15,7 @@ package main
 
 import (
 	"flag"
+	"github.com/opensourceways/robot-framework-lib/client"
 	"github.com/opensourceways/robot-framework-lib/config"
 	"github.com/opensourceways/server-common-lib/secret"
 	"github.com/sirupsen/logrus"
@@ -75,6 +76,11 @@ func (o *robotOptions) gatherOptions(fs *flag.FlagSet, args ...string) (*configu
 	o.addFlags(fs)
 	_ = fs.Parse(args)
 	cnf, token := o.validateFlags()
+
+	if cnf != nil {
+		client.SetSigInfoBaseURL(cnf.SigInfoURL)
+		client.SetCommunityName(cnf.CommunityName)
+	}
 
 	return cnf, token
 }

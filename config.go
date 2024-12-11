@@ -32,6 +32,8 @@ type configuration struct {
 	PlaceholderCommitter         string       `json:"placeholder_committer" required:"true"`
 	PlaceholderCLASignGuideTitle string       `json:"placeholder_cla_sign_guide_title" required:"true"`
 	PlaceholderCLASignPassTitle  string       `json:"placeholder_cla_sign_pass_title" required:"true"`
+	SigInfoURL                   string       `json:"sig_info_url" required:"true"`
+	CommunityName                string       `json:"community_name" required:"true"`
 }
 
 // Validate to check the configmap data's validation, returns an error if invalid

@@ -37,6 +37,7 @@ type iClient interface {
 	CheckCLASignature(urlStr string) (signState string, success bool)
 	CheckIfPRCreateEvent(evt *client.GenericEvent) (yes bool)
 	CheckIfPRSourceCodeUpdateEvent(evt *client.GenericEvent) (yes bool)
+	CheckPermission(org, repo, username string) (pass, success bool)
 }
 
 type robot struct {
@@ -99,9 +100,12 @@ func (bot *robot) handlePullRequestCommentEvent(evt *client.GenericEvent, cnf co
 	comment := strings.TrimSpace(utils.GetString(evt.Comment))
 	// Checks if the comment is only "/cla cancel" that can be handled
 	if regexpCancelCLAComment.MatchString(comment) {
-		prLabels, _ := bot.cli.GetPullRequestLabels(org, repo, number)
-		if slices.Contains(prLabels, repoCnf.CLALabelYes) {
-			bot.cli.RemovePRLabels(org, repo, number, []string{url.QueryEscape(repoCnf.CLALabelNo)})
+		permissionPass, _ := bot.cli.CheckPermission(org, repo, utils.GetString(evt.Commenter))
+		if permissionPass {
+			prLabels, _ := bot.cli.GetPullRequestLabels(org, repo, number)
+			if slices.Contains(prLabels, repoCnf.CLALabelYes) {
+				bot.cli.RemovePRLabels(org, repo, number, []string{url.QueryEscape(repoCnf.CLALabelYes)})
+			}
 		}
 		return
 	}
