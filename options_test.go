@@ -27,6 +27,7 @@ const (
 	commandTokenFilePrefix  = "--token-path="
 	commandDelToken         = "--del-token=false"
 	commandHandlePath       = "--handle-path=gitcode-hook"
+	configYaml              = "config.yaml"
 )
 
 func TestGatherOptions(t *testing.T) {
@@ -34,7 +35,7 @@ func TestGatherOptions(t *testing.T) {
 	args := []string{
 		commandExecFile,
 		commandPort,
-		commandConfigFilePrefix + findTestdata(t, "config.yaml"),
+		commandConfigFilePrefix + findTestdata(t, configYaml),
 	}
 	opt := new(robotOptions)
 	_, _ = opt.gatherOptions(flag.NewFlagSet(args[0], flag.ExitOnError), args[1:]...)
@@ -53,7 +54,7 @@ func TestGatherOptions(t *testing.T) {
 
 	args = []string{
 		commandExecFile,
-		commandConfigFilePrefix + findTestdata(t, "config.yaml"),
+		commandConfigFilePrefix + findTestdata(t, configYaml),
 		commandHandlePath,
 		commandTokenFilePrefix + "/token1",
 		commandDelToken,
@@ -71,7 +72,7 @@ func TestGatherOptions(t *testing.T) {
 	assert.Equal(t, false, opt.interrupt)
 	assert.Equal(t, "gitcode-hook", opt.service.HandlePath)
 	want := &configuration{}
-	_ = utils.LoadFromYaml(findTestdata(t, "config.yaml"), want)
+	_ = utils.LoadFromYaml(findTestdata(t, configYaml), want)
 	assert.Equal(t, *want, *got)
 	assert.Equal(t, "1231****55324", string(token))
 }

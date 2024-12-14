@@ -1,6 +1,6 @@
-FROM openeuler/openeuler:24.03-lts as BUILDER
+FROM openeuler/openeuler:24.03-lts AS BUILDER
 RUN dnf -y install golang && \
-    dnf -y upgrade-minimal
+    dnf -y upgrade
 
 ARG USER
 ARG PASS
@@ -13,7 +13,7 @@ RUN go build -a -o robot-universal-cla -buildmode=pie -ldflags "-s -linkmode 'ex
 
 # copy binary config and utils
 FROM openeuler/openeuler:24.03-lts
-RUN dnf -y upgrade-minimal && \
+RUN dnf -y upgrade && \
     dnf in -y shadow && \
     groupadd -g 1000 robot && \
     useradd -u 1000 -g robot -s /bin/bash -m robot

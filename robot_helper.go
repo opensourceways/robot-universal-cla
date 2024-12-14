@@ -24,7 +24,6 @@ import (
 
 func (bot *robot) checkIfAllSignedCLA(org, repo, number string, repoCnf *repoConfig, logger *logrus.Entry) {
 
-	// List
 	commits, success := bot.cli.GetPullRequestCommits(org, repo, number)
 	if !success {
 		bot.cli.CreatePRComment(org, repo, number, bot.cnf.CommentCommandTrigger)
@@ -79,7 +78,7 @@ func (bot *robot) checkCLASignResult(org, repo, number string,
 	}
 
 	signResult[0] = signedUsers
-	allSigned = len(signedUsers) == len(emails)
+	allSigned = len(emails) != 0 && len(signedUsers) == len(emails)
 	return
 }
 
@@ -120,7 +119,8 @@ func (bot *robot) passCLASignature(org, repo, number string, signedUsers, prLabe
 		for i, user := range signedUsers {
 			signedUserMark[i] = strings.ReplaceAll(bot.cnf.UserMarkFormat, bot.cnf.PlaceholderCommitter, user)
 		}
-		comment = strings.ReplaceAll(bot.cnf.CommentAllSigned, bot.cnf.PlaceholderCommitter, strings.Join(signedUserMark, ", "))
+		comment = strings.ReplaceAll(bot.cnf.CommentAllSigned, bot.cnf.PlaceholderCommitter,
+			strings.Join(signedUserMark, ", "))
 		bot.removeCLASignGuideComment(org, repo, number)
 	}
 	bot.cli.CreatePRComment(org, repo, number, comment)
@@ -144,7 +144,8 @@ func (bot *robot) waitCLASignature(org, repo, number string, unsignedUsers, prLa
 		for i, user := range unsignedUsers {
 			unsignedUserMark[i] = strings.ReplaceAll(bot.cnf.UserMarkFormat, bot.cnf.PlaceholderCommitter, user)
 		}
-		comment = fmt.Sprintf(bot.cnf.CommentSomeNeedSign, strings.Join(unsignedUserMark, ", "), repoCnf.SignURL, repoCnf.FAQURL)
+		comment = fmt.Sprintf(bot.cnf.CommentSomeNeedSign, strings.Join(unsignedUserMark, ", "),
+			repoCnf.SignURL, repoCnf.FAQURL)
 		bot.removeCLASignGuideComment(org, repo, number)
 	}
 	bot.cli.CreatePRComment(org, repo, number, comment)

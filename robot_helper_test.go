@@ -33,6 +33,8 @@ type mockClient struct {
 	successfulGetPullRequestCommits          bool
 	successfulGetPullRequestLabels           bool
 	successfulListPullRequestComments        bool
+	successfulCheckPermission                bool
+	permission                               bool
 	method                                   string
 	commits                                  []client.PRCommit
 	prComments                               []client.PRComment
@@ -90,6 +92,11 @@ func (m *mockClient) ListPullRequestComments(org, repo, number string) ([]client
 	return m.prComments, m.successfulListPullRequestComments
 }
 
+func (m *mockClient) CheckPermission(org, repo, username string) (bool, bool) {
+	m.method = "CheckPermission"
+	return m.permission, m.successfulCheckPermission
+}
+
 const (
 	org       = "org1"
 	repo      = "repo1"
@@ -104,21 +111,26 @@ func TestRemoveCLASignGuideComment(t *testing.T) {
 	mc := new(mockClient)
 	bot := &robot{cli: mc, cnf: &configuration{
 		PlaceholderCLASignGuideTitle: "#123",
+		PlaceholderCLASignPassTitle:  "#456",
 	}}
 	cli, ok := bot.cli.(*mockClient)
 	assert.Equal(t, true, ok)
 
 	case1 := "ListPullRequestComments"
-	cli.method = case1
+	cli.method = ""
 	// get comments failed
 	bot.removeCLASignGuideComment(org, repo, number)
-	assert.Equal(t, case1, cli.method)
+	execMethod1 := cli.method
+	assert.Equal(t, case1, execMethod1)
 
+	cli.method = ""
 	cli.successfulListPullRequestComments = true
 	// getting comments to remove
 	bot.removeCLASignGuideComment(org, repo, number)
-	assert.Equal(t, case1, cli.method)
+	execMethod2 := cli.method
+	assert.Equal(t, case1, execMethod2)
 
+	cli.method = ""
 	cli.prComments = []client.PRComment{
 		{
 			"123132",
@@ -128,14 +140,16 @@ func TestRemoveCLASignGuideComment(t *testing.T) {
 	bot.cnf.PlaceholderCLASignGuideTitle = "222"
 	// not found CLA sign guide comment
 	bot.removeCLASignGuideComment(org, repo, number)
-	assert.Equal(t, case1, cli.method)
+	execMethod3 := cli.method
+	assert.Equal(t, case1, execMethod3)
 
 	case4 := "DeletePRComment"
-	cli.method = case4
+	cli.method = ""
 	bot.cnf.PlaceholderCLASignGuideTitle = "111"
 	// delete the CLA sign guide comment
 	bot.removeCLASignGuideComment(org, repo, number)
-	assert.Equal(t, case4, cli.method)
+	execMethod4 := cli.method
+	assert.Equal(t, case4, execMethod4)
 }
 
 func TestWaitCLASignature(t *testing.T) {
@@ -156,20 +170,23 @@ func TestWaitCLASignature(t *testing.T) {
 	case1 := "unsigned users is empty"
 	cli.method = case1
 	bot.waitCLASignature(org, repo, number, []string{}, []string{labelYes}, repoCnf)
-	assert.Equal(t, case1, cli.method)
+	execMethod1 := cli.method
+	assert.Equal(t, case1, execMethod1)
 
 	case2 := "CreatePRComment"
-	cli.method = case2
+	cli.method = ""
 	// PR labels contains CLA failed label
 	bot.waitCLASignature(org, repo, number, []string{"user1"}, []string{labelNo}, repoCnf)
-	assert.Equal(t, case2, cli.method)
+	execMethod2 := cli.method
+	assert.Equal(t, case2, execMethod2)
 
 	case3 := "CreatePRComment"
-	cli.method = case3
+	cli.method = ""
 	cli.successfulAddPRLabels = true
 	// remove CLA success label, and add CLA failed label
 	bot.waitCLASignature(org, repo, number, []string{"user1"}, []string{labelYes}, repoCnf)
-	assert.Equal(t, case3, cli.method)
+	execMethod3 := cli.method
+	assert.Equal(t, case3, execMethod3)
 }
 
 func TestPassCLASignature(t *testing.T) {
@@ -188,16 +205,126 @@ func TestPassCLASignature(t *testing.T) {
 	}
 
 	case1 := "CreatePRComment"
-	cli.method = case1
+	cli.method = ""
 	// PR labels contains CLA failed label and CLA success label
 	bot.passCLASignature(org, repo, number, []string{"user2"}, []string{labelYes, labelNo}, repoCnf)
-	assert.Equal(t, case1, cli.method)
+	execMethod1 := cli.method
+	assert.Equal(t, case1, execMethod1)
 
 	case2 := "CreatePRComment"
-	cli.method = case2
+	cli.method = ""
 	cli.successfulAddPRLabels = true
 	// PR labels is empty
 	bot.passCLASignature(org, repo, number, []string{"user3"}, []string{}, repoCnf)
-	assert.Equal(t, case2, cli.method)
+	execMethod2 := cli.method
+	assert.Equal(t, case2, execMethod2)
 
+}
+
+func TestListContributorNameAndEmail(t *testing.T) {
+	mc := new(mockClient)
+	bot := &robot{cli: mc, cnf: &configuration{}}
+	repoCnf := &repoConfig{}
+
+	var commits []client.PRCommit
+	// PR commits is empty
+	users, emails := bot.ListContributorNameAndEmail(commits, repoCnf)
+	assert.Equal(t, []string{}, users)
+	assert.Equal(t, []string{}, emails)
+
+	commits1 := []client.PRCommit{
+		{
+			"u1",
+			"e1",
+			"u2",
+			"e2",
+		},
+		{
+			"u1",
+			"e1",
+			"u2",
+			"e2",
+		},
+	}
+	// use author info
+	users1, emails1 := bot.ListContributorNameAndEmail(commits1, repoCnf)
+	assert.Equal(t, true, len(users1) == 1 && len(emails1) == 1)
+	assert.Equal(t, "u1", users1[0])
+	assert.Equal(t, "e1", emails1[0])
+
+	repoCnf.CheckByCommitter = true
+	// use committer info
+	users2, emails2 := bot.ListContributorNameAndEmail(commits1, repoCnf)
+	assert.Equal(t, true, len(users2) == 1 && len(emails2) == 1)
+	assert.Equal(t, "u2", users2[0])
+	assert.Equal(t, "e2", emails2[0])
+}
+
+func TestCheckCLASignResult(t *testing.T) {
+	mc := new(mockClient)
+	bot := &robot{cli: mc, cnf: &configuration{}}
+	cli, ok := bot.cli.(*mockClient)
+	assert.Equal(t, true, ok)
+	repoCnf := &repoConfig{
+		LitePRCommitter: litePRCommiter{
+			"e0",
+			"u0",
+		},
+	}
+
+	var commits []client.PRCommit
+	// PR commits is empty
+	allSigned, signResult := bot.checkCLASignResult(org, repo, number, commits, repoCnf)
+	assert.Equal(t, false, allSigned)
+	assert.Equal(t, ([]string)(nil), signResult[0])
+	assert.Equal(t, ([]string)(nil), signResult[1])
+	assert.Equal(t, ([]string)(nil), signResult[2])
+
+	commits1 := []client.PRCommit{
+		{
+			"u3",
+			"e3",
+			"u3",
+			"e3",
+		},
+	}
+	cli.CLAState = client.CLASignStateUnknown
+	// CLA sever is unavailable
+	allSigned1, signResult1 := bot.checkCLASignResult(org, repo, number, commits1, repoCnf)
+	assert.Equal(t, false, allSigned1)
+	assert.Equal(t, ([]string)(nil), signResult1[0])
+	assert.Equal(t, ([]string)(nil), signResult1[1])
+	assert.Equal(t, []string{"u3"}, signResult1[2])
+
+	cli.CLAState = client.CLASignStateNo
+	// CLA sever is available, but not signed
+	allSigned2, signResult2 := bot.checkCLASignResult(org, repo, number, commits1, repoCnf)
+	assert.Equal(t, false, allSigned2)
+	assert.Equal(t, ([]string)(nil), signResult2[0])
+	assert.Equal(t, []string{"u3"}, signResult2[1])
+	assert.Equal(t, ([]string)(nil), signResult2[2])
+
+	cli.CLAState = client.CLASignStateYes
+	// CLA sever is available, and signed
+	allSigned3, signResult3 := bot.checkCLASignResult(org, repo, number, commits1, repoCnf)
+	assert.Equal(t, true, allSigned3)
+	assert.Equal(t, []string{"u3"}, signResult3[0])
+	assert.Equal(t, ([]string)(nil), signResult3[1])
+	assert.Equal(t, ([]string)(nil), signResult3[2])
+
+	commits2 := []client.PRCommit{
+		{
+			"u0",
+			"e0",
+			"u0",
+			"e0",
+		},
+	}
+	cli.CLAState = client.CLASignStateYes
+	// CLA sever is available, and signed, but email is invalid
+	allSigned4, signResult4 := bot.checkCLASignResult(org, repo, number, commits2, repoCnf)
+	assert.Equal(t, false, allSigned4)
+	assert.Equal(t, ([]string)(nil), signResult4[0])
+	assert.Equal(t, ([]string)(nil), signResult4[1])
+	assert.Equal(t, []string{"u0"}, signResult4[2])
 }

@@ -50,7 +50,8 @@ func TestValidate(t *testing.T) {
 			},
 			[2]error{nil, errors.New("missing the follow config: user_mark_format, " +
 				"comment_command_trigger, comment_pr_no_commits, comment_all_signed, comment_some_need_sign, " +
-				"comment_update_label_failed, placeholder_committer, placeholder_cla_sign_guide_title")},
+				"comment_update_label_failed, placeholder_committer, placeholder_cla_sign_guide_title, " +
+				"placeholder_cla_sign_pass_title, sig_info_url, community_name")},
 		},
 		{
 			"no valid org or repo in the config",
@@ -72,7 +73,7 @@ func TestValidate(t *testing.T) {
 			"a correct config",
 			args{
 				&configuration{},
-				"config.yaml",
+				configYaml,
 			},
 			[2]error{nil, nil},
 		},
@@ -96,7 +97,7 @@ func TestGetRepoConfig(t *testing.T) {
 	got := cnf.getRepoConfig("owner1", "")
 	assert.Equal(t, (*repoConfig)(nil), got)
 
-	err := utils.LoadFromYaml(findTestdata(t, "config.yaml"), cnf)
+	err := utils.LoadFromYaml(findTestdata(t, configYaml), cnf)
 	assert.Equal(t, nil, err)
 
 	testCases := []struct {
