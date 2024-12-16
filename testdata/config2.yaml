@@ -1,0 +1,7 @@
+config_items:
+  - repos:
+      - owner2
+    excluded_repos:
+      - owner2
+    cla_label_yes: org-cla/yes
+

@@ -1,0 +1,4 @@
+config_items:
+  - repos:
+    cla_label_yes: org-cla/yes
+
